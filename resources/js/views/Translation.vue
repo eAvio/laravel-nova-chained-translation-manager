@@ -1,11 +1,37 @@
 <template>
   <loading-view :loading="initialLoading">
+    <!-- Clear translations cache button -->
+    <button
+      @click="recompileTranslations"
+      class="mb-6 mr-4 btn btn-default btn-primary btn-warning flex items-center"
+      :disabled="isClearingCache"
+    >
+      <span v-if="!isClearingCache" class="mr-3"
+        ><svg
+          xmlns="http://www.w3.org/2000/svg"
+          fill="none"
+          viewBox="0 0 24 24"
+          stroke-width="1.5"
+          stroke="currentColor"
+          class="w-6 h-6"
+        >
+          <path
+            stroke-linecap="round"
+            stroke-linejoin="round"
+            d="M20.25 6.375c0 2.278-3.694 4.125-8.25 4.125S3.75 8.653 3.75 6.375m16.5 0c0-2.278-3.694-4.125-8.25-4.125S3.75 4.097 3.75 6.375m16.5 0v11.25c0 2.278-3.694 4.125-8.25 4.125s-8.25-1.847-8.25-4.125V6.375m16.5 0v3.75m-16.5-3.75v3.75m16.5 0v3.75C20.25 16.153 16.556 18 12 18s-8.25-1.847-8.25-4.125v-3.75m16.5 0c0 2.278-3.694 4.125-8.25 4.125s-8.25-1.847-8.25-4.125"
+          /></svg
+      ></span>
+
+      <span v-if="!isClearingCache">CLEAR TRANSLATION CACHE</span>
+      <span v-if="isClearingCache">CLEARING...</span>
+    </button>
+
     <heading :level="1" class="mb-3">
       {{ __("Translations") }}
     </heading>
-    <div class="flex">
+    <div class="flex flex-wrap">
       <!-- search -->
-      <div class="relative mb-6 h-9 flex-no-shrink">
+      <div class="relative mb-6 h-9 flex-grow">
         <icon type="search" class="absolute ml-3 search-icon-center text-70" />
         <label for="search">
           <input
@@ -20,7 +46,7 @@
       <!-- only empty checkbox -->
       <checkbox-with-label
         :checked="onlyMissing"
-        class="mb-6 ml-3"
+        class="mb-6 ml-3 px-2"
         @input="onlyMissing = !onlyMissing"
       >
         {{ __("Only show missing translations") }}
@@ -42,11 +68,7 @@
                     {{ __("Select All") }}
                   </checkbox-with-label>
                 </li>
-                <li
-                  v-for="group in groups"
-                  :key="group"
-                  class="flex items-center mb-4"
-                >
+                <li v-for="group in groups" :key="group" class="flex items-center mb-4">
                   <checkbox-input
                     :value="group"
                     :text="group"
@@ -76,11 +98,7 @@
                     {{ __("Select All") }}
                   </checkbox-with-label>
                 </li>
-                <li
-                  v-for="l in locales"
-                  :key="l.locale"
-                  class="flex items-center mb-4"
-                >
+                <li v-for="l in locales" :key="l.locale" class="flex items-center mb-4">
                   <checkbox-input
                     :value="l.locale"
                     :text="l.language"
@@ -170,6 +188,7 @@ export default {
         groups: [],
       },
       onlyMissing: false,
+      isClearingCache: false,
     };
   },
   computed: {
@@ -200,18 +219,16 @@ export default {
               const translations = v.translations;
               if (this.search) {
                 const keysToSearch = this.selected.locales.length
-                    ? this.selected.locales
-                    : this.locales.map(({ locale }) => locale);
+                  ? this.selected.locales
+                  : this.locales.map(({ locale }) => locale);
                 return (
-                    key.toLowerCase().includes(this.search.toLowerCase()) ||
-                    keysToSearch.find(
-                        (l) =>
-                            translations[l] &&
-                            translations[l].toLowerCase &&
-                            translations[l]
-                                .toLowerCase()
-                                .includes(this.search.toLowerCase())
-                    )
+                  key.toLowerCase().includes(this.search.toLowerCase()) ||
+                  keysToSearch.find(
+                    (l) =>
+                      translations[l] &&
+                      translations[l].toLowerCase &&
+                      translations[l].toLowerCase().includes(this.search.toLowerCase())
+                  )
                 );
               }
               return true;
@@ -222,15 +239,39 @@ export default {
     },
     onlyMissingTranslations() {
       const data = this.translations;
-      return data.filter(
-        ({ translations }) => Object.keys(translations).length < 3
-      );
+      return data.filter(({ translations }) => Object.keys(translations).length < 3);
     },
   },
   created() {
     this.getTranslations();
   },
   methods: {
+    recompileTranslations() {
+      this.isClearingCache = true;
+      fetch("/api/recompile-translations", {
+        method: "GET",
+        headers: {
+          "X-Requested-With": "XMLHttpRequest", // This is to signify it's an AJAX request
+          "X-CSRF-TOKEN": document
+            .querySelector('meta[name="csrf-token"]')
+            .getAttribute("content"),
+        },
+      })
+        .then((response) => {
+          this.isClearingCache = false;
+          
+          if (response.ok && response.status === 200) {
+            alert("Translations cleared successfully.");
+          } else {
+            alert("An error occurred while clearing translations.");
+          }
+        })
+        .catch((error) => {
+          this.isClearingCache = false;
+          console.error("Error:", error);
+          alert("An error occurred while clearing translations.");
+        });
+    },
     toggleGroups(group) {
       this.toggle("groups", group);
     },
@@ -242,14 +283,10 @@ export default {
         if (this.selected[type].length === this[type].length) {
           this.selected[type] = [];
         } else {
-          this.selected[type] = this[type]
-            .map((v) => (v.locale ? v.locale : v))
-            .sort();
+          this.selected[type] = this[type].map((v) => (v.locale ? v.locale : v)).sort();
         }
       } else if (this.selected[type].includes(val)) {
-        this.selected[type] = this.selected[type].filter(
-          (item) => item !== val
-        );
+        this.selected[type] = this.selected[type].filter((item) => item !== val);
       } else {
         this.selected[type] = [...this.selected[type], val].sort();
       }
