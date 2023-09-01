@@ -14,6 +14,7 @@
           stroke-width="1.5"
           stroke="currentColor"
           class="w-6 h-6"
+          style="vertical-align: middle"
         >
           <path
             stroke-linecap="round"
